@@ -1,0 +1,11 @@
+{
+  "name": "azurefunctions",
+  "version": "0.0.1",
+  "author": {
+    "name": "Microsoft Corporation"
+  },
+  "description": "Basic Operations with Azure Storage Table Service",
+  "dependencies": {
+    "azure-storage": "~2.10.3"
+  }
+}
