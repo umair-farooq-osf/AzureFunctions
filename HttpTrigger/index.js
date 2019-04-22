@@ -1,4 +1,4 @@
-module.exports = function (context, req) {
+module.exports = async function (context, req) {
     context.log("JavaScript HTTP trigger function processed a request.");
 
     var parametersKeys = Object.keys(req.query);
@@ -27,62 +27,26 @@ module.exports = function (context, req) {
             person[parametersKeys[i]] = parameters[parametersKeys[i]];
         }
 
-        return Promise.all([
-            new Promise((resolve, reject) => {
-                createTableService.createTableIfNotExists(tableName, (error, createResult) => {
-                    if (error) {
-                        return reject(error);
-                    }
+        try {
+            await createTable(createTableService, tableName);
 
-                    if (createResult.isSuccessful) {
-                        return resolve({
-                            success: true,
-                            message: !createResult.created
-                                ? "Table: " + tableName + " already created"
-                                : "Table: " + tableName + " created successfully"
-                        });
-                    }
-
-                    reject("Something went wrong!!");
-                });
-            }),
-            new Promise((resolve, reject) => {
-                var entityGenerator = storage.TableUtilities.entityGenerator;
-                var personEntity = {
-                    PartitionKey: entityGenerator.String(person.name),
-                    RowKey: entityGenerator.String(person.name),
-                    name: entityGenerator.String(person.name),
-                };
-
-                createTableService.insertOrMergeEntity(tableName, personEntity, (error, result, insertResult) => {
-                    if (error) {
-                        return reject(error);
-                    }
-
-                    if (insertResult.isSuccessful) {
-                        return resolve({
-                            success: true,
-                            message: "Person added successfully"
-                        });
-                    }
-
-                    reject("Something went wrong!!");
-                });
-            })
-        ])
-        .then(data => {
-            var responseObject = data.length ? data[data.length - 1] : {};
-            context.res = {
-                body: responseObject.message
+            var entityGenerator = storage.TableUtilities.entityGenerator;
+            var personEntity = {
+                PartitionKey: entityGenerator.String(person.name),
+                RowKey: entityGenerator.String(person.name),
+                name: entityGenerator.String(person.name),
             };
-            return context;
-        })
-        .catch(error => {
+
+            var insertEntityResult = await insertEntity(createTableService, tableName, personEntity);
+
+            context.res = {
+                body: insertEntityResult.message
+            };
+        } catch (error) {
             context.res = {
                 body: typeof error === "object" ? error.message : error
             };
-            return context;
-        });
+        }
     }
     else {
         context.res = {
@@ -91,3 +55,43 @@ module.exports = function (context, req) {
         };
     }
 };
+
+function createTable(createTableService, tableName) {
+    return new Promise((resolve, reject) => {
+        createTableService.createTableIfNotExists(tableName, (error, createResult) => {
+            if (error) {
+                return reject(error);
+            }
+
+            if (createResult.isSuccessful) {
+                return resolve({
+                    success: true,
+                    message: !createResult.created
+                        ? "Table: " + tableName + " already created"
+                        : "Table: " + tableName + " created successfully"
+                });
+            }
+
+            reject("Something went wrong!!");
+        });
+    });
+}
+
+function insertEntity(createTableService, tableName, entity) {
+    return new Promise((resolve, reject) => {
+        createTableService.insertOrMergeEntity(tableName, entity, (error, result, insertResult) => {
+            if (error) {
+                return reject(error);
+            }
+
+            if (insertResult.isSuccessful) {
+                return resolve({
+                    success: true,
+                    message: "Person added successfully"
+                });
+            }
+
+            reject("Something went wrong!!");
+        });
+    });
+}
