@@ -12,15 +12,8 @@ module.exports = async function (context, req) {
     if (parametersKeys.length) {
         var uuid = require('uuid/v4');
         var storage = require("azure-storage");
-        var config = require("./config");
 
-        if (config.useDevelopmentStorage) {
-            //Creates a connection string that can be used to create a service which runs on the storage emulator. The emulator must be downloaded separately.
-          config.connectionString = storage.generateDevelopmentStorageCredentials();
-        }
-
-        //var entityGenerator = storage.TableUtilities.entityGenerator;
-        var createTableService = storage.createTableService(config.connectionString);
+        var createTableService = storage.createTableService(process.env.AzureWebJobsStorage);
         var tableName = "people";
         var person = {};
 

@@ -1,5 +1,0 @@
-{
-    "useDevelopmentStorage": false,
-    "connectionString": "DefaultEndpointsProtocol=https;AccountName=azurecosmosdbtest1;AccountKey=2igdglAv6NFzRaCxKXsYHE7SzAWMqQkUruc59oLFazeJJjmqQfTithpX04VWxCT4BJuHYZTnAAUyWS16dVzCrg==;TableEndpoint=https://azurecosmosdbtest1.table.cosmos.azure.com:443/;",
-    "sas": ""
-  }
