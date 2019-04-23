@@ -1,15 +1,12 @@
 module.exports = async function (context, req) {
     context.log("JavaScript HTTP trigger function processed a request.");
 
-    var parametersKeys = Object.keys(req.query);
-    var parameters = req.query;
-
-    if (!parametersKeys.length && req.body) {
+    if (req.body) {
         parametersKeys = Object.keys(req.body);
         parameters = req.body;
     }
 
-    if (parametersKeys.length) {
+    if (req.body && req.body.people && Array.isArray(req.body.people)) {
         var uuid = require('uuid/v4');
         var storage = require("azure-storage");
         var config = require("./config");
@@ -21,35 +18,58 @@ module.exports = async function (context, req) {
 
         //var entityGenerator = storage.TableUtilities.entityGenerator;
         var createTableService = storage.createTableService(config.connectionString);
+        var entityGenerator = storage.TableUtilities.entityGenerator;
         var tableName = "people";
-        var person = {};
+        var partitionKey = uuid();
+        var batches = [];
 
-        for (var i = 0; i < parametersKeys.length; i++) {
-            person[parametersKeys[i]] = parameters[parametersKeys[i]];
+        for (var i = 0; i < req.body.people.length; i++) {
+            var person = req.body.people[i];
+            var insertBatch;
+            var batchIndex = -1;
+
+            if (person.partitionKey) {
+                batchIndex = batches.findIndex(batch => batch.partitionKey === person.partitionKey);
+            }
+
+
+            if (batchIndex === -1) {
+                insertBatch = new storage.TableBatch();
+            }
+
+            if (insertBatch) {
+                insertBatch.insertOrMergeEntity(
+                    getPersonEntity(
+                        entityGenerator,
+                        person.partitionKey || partitionKey,
+                        person.rowKey || uuid(),
+                        person.name
+                    )
+                );
+                batches.push(insertBatch);
+            } else {
+                batches[batchIndex].insertOrMergeEntity(
+                    getPersonEntity(
+                        entityGenerator,
+                        person.partitionKey || partitionKey,
+                        person.rowKey || uuid(),
+                        person.name
+                    )
+                );
+            }
         }
 
         try {
             await createTable(createTableService, tableName);
 
-            var entityGenerator = storage.TableUtilities.entityGenerator;
-            var personEntity = {
-                /* It will be an identifier used to identify a partition on which entity is stored.
-                This is used for scaling */
-                PartitionKey: entityGenerator.String(person.paritionKey || "Non-Partition"),
-
-                /* This is unique key within a partition. The most efficient query 
-                is composite Partition Key + Row Key */
-                RowKey: entityGenerator.String(person.rowKey || uuid()),
-                name: entityGenerator.String(person.name)
-            };
-
-            var insertEntityResult = await insertEntity(createTableService, tableName, personEntity);
+            for (var i = 0; i < batches.length; i++) {
+                await insertEntities(createTableService, tableName, batches[i]);
+            }
 
             var tableQuery = new storage.TableQuery().top(10);
             var queryEntities = await getTopTenEntities(createTableService, tableName, tableQuery, null);
 
-            var responseMsg = insertEntityResult.message + "\n";
-            responseMsg += "Top 10 records\n";
+            var responseMsg = "Top 10 records\n";
             responseMsg += queryEntities.people;
 
             context.res = {
@@ -64,7 +84,7 @@ module.exports = async function (context, req) {
     else {
         context.res = {
             status: 400,
-            body: "Please pass required parameters in the query string or in the request body"
+            body: "Please pass required parameters in the request body"
         };
     }
 };
@@ -90,9 +110,9 @@ function createTable(createTableService, tableName) {
     });
 }
 
-function insertEntity(createTableService, tableName, entity) {
+function insertEntities(createTableService, tableName, batch) {
     return new Promise((resolve, reject) => {
-        createTableService.insertOrMergeEntity(tableName, entity, (error, result, insertResult) => {
+        createTableService.executeBatch(tableName, batch, (error, result, insertResult) => {
             if (error) {
                 return reject(error);
             }
@@ -100,7 +120,7 @@ function insertEntity(createTableService, tableName, entity) {
             if (insertResult.isSuccessful) {
                 return resolve({
                     success: true,
-                    message: "Person added/updated successfully"
+                    message: "Persons added/updated successfully"
                 });
             }
 
@@ -129,4 +149,18 @@ function getTopTenEntities(createTableService, tableName, tableQuery, continuati
             });
         });
     })
+}
+
+function getPersonEntity(entityGenerator, partitionKey, rowKey, name) {
+    return {
+        /* It will be an identifier used to identify a partition on which entity is stored.
+        This is used for scaling */
+        // All entities in batch must have same partition key
+        PartitionKey: entityGenerator.String(partitionKey),
+
+        /* This is unique key within a partition. The most efficient query 
+        is composite Partition Key + Row Key */
+        RowKey: entityGenerator.String(rowKey),
+        name: entityGenerator.String(name)
+    }
 }
