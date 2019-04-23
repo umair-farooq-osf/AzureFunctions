@@ -6,6 +6,7 @@
   },
   "description": "Basic Operations with Azure Storage Table Service",
   "dependencies": {
-    "azure-storage": "~2.10.3"
+    "azure-storage": "~2.10.3",
+    "uuid": "^3.3.2"
   }
 }

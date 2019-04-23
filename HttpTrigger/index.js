@@ -10,6 +10,7 @@ module.exports = async function (context, req) {
     }
 
     if (parametersKeys.length) {
+        var uuid = require('uuid/v1');
         var storage = require("azure-storage");
         var config = require("./config");
 
@@ -32,15 +33,27 @@ module.exports = async function (context, req) {
 
             var entityGenerator = storage.TableUtilities.entityGenerator;
             var personEntity = {
-                PartitionKey: entityGenerator.String(person.name),
-                RowKey: entityGenerator.String(person.name),
-                name: entityGenerator.String(person.name),
+                /* It will be an identifier used to identify a partition on which entity is stored.
+                This is used for scaling */
+                PartitionKey: entityGenerator.String(person.country || "Non-Partition"),
+
+                /* This is unique key within a partition. The most efficient query 
+                is composite Partition Key + Row Key */
+                RowKey: entityGenerator.String(person.uuid || uuid()),
+                name: entityGenerator.String(person.name)
             };
 
             var insertEntityResult = await insertEntity(createTableService, tableName, personEntity);
 
+            var tableQuery = new storage.TableQuery().top(10);
+            var queryEntities = await getTopTenEntities(createTableService, tableName, tableQuery, null);
+
+            var responseMsg = insertEntityResult.message + "\n";
+            responseMsg += "Top 10 records\n";
+            responseMsg += queryEntities.peopleNames;
+
             context.res = {
-                body: insertEntityResult.message
+                body: responseMsg
             };
         } catch (error) {
             context.res = {
@@ -94,4 +107,24 @@ function insertEntity(createTableService, tableName, entity) {
             reject("Something went wrong!!");
         });
     });
+}
+
+function getTopTenEntities(createTableService, tableName, tableQuery, continuationToken) {
+    return new Promise((resolve, reject) => {
+        createTableService.queryEntities(tableName, tableQuery, continuationToken, function (error, result) {
+            if (error) {
+                return reject(error);
+            }
+
+            var entities = result.entries;
+            var peopleNames = [];
+            entities.forEach(function (entity) {
+                peopleNames.push(entity.name._);
+            });
+
+            resolve({
+                peopleNames: peopleNames.join("\n")
+            });
+        });
+    })
 }
