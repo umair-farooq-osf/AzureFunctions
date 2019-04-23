@@ -35,7 +35,7 @@ module.exports = async function (context, req) {
             var personEntity = {
                 /* It will be an identifier used to identify a partition on which entity is stored.
                 This is used for scaling */
-                PartitionKey: entityGenerator.String(person.paritionKey || "Non-Partition"),
+                PartitionKey: entityGenerator.String(person.partitionKey || "Non-Partition"),
 
                 /* This is unique key within a partition. The most efficient query 
                 is composite Partition Key + Row Key */
