@@ -18,3 +18,5 @@ Two azure functions are developed
 * If **partitionKey** is not passed in array object, a a random string is used as partition key for all objects not having a partition key.
 * If **rowKey** is not passed in array object, a random string using **uuid** package is used.
 * Query top 10 records and sends those in response
+
+PR Test
